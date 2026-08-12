@@ -216,12 +216,54 @@ void piSendAux(void)
     }
 }
 
+void piSendStatus(void)
+{
+    piMsgPiStatusTx.time_us = micros();
+
+    uint8_t flags = 0;
+    if (ARMING_FLAG(ARMED)) {
+        flags |= PI_STATUS_FLAG_ARMED;
+    }
+    // Bit 1 means "the FC is obeying the offboard command channel this airframe
+    // uses", which here is POS_SETPOINT. POSITION_MODE is gated on BOXPOSCTL
+    // *and* a converged EKF (fc/core.c), so it only sets once setpoints are
+    // really being tracked - the box mode alone would read ready too early.
+    // Builds driven over RC_OVERRIDE report BOXPIOVERRIDE in this same bit.
+    if (FLIGHT_MODE(POSITION_MODE)) {
+        flags |= PI_STATUS_FLAG_PI_OVERRIDE_ACTIVE;
+    }
+    if (rxAreFlightChannelsValid()) {
+        flags |= PI_STATUS_FLAG_RX_LINK_VALID;
+    }
+    piMsgPiStatusTx.flags = flags;
+
+    if (piPort) {
+        piSendMsg(&piMsgPiStatusTx, &serialWriter);
+    }
+}
+
+void piSendBattery(void)
+{
+    piMsgBatteryTx.time_us = micros();
+    piMsgBatteryTx.voltage = getBatteryVoltage() * 0.01f;  // 10mV units -> V
+    piMsgBatteryTx.current = getAmperage() * 0.01f;        // 10mA units -> A
+    piMsgBatteryTx.cell_count = getBatteryCellCount();
+
+    if (piPort) {
+        piSendMsg(&piMsgBatteryTx, &serialWriter);
+    }
+}
+
 void processPiTelemetry(void)
 {
     // handled event based now, whenever there is stuff to be send, those functions
     // call piSendEkfInputs, or similar. More boilerplate, but lower latency
     piSendAux();
     piSendIMU();
+    // TASK_TELEMETRY already runs at TELEMETRY_PI_MAXRATE, so these need no
+    // decimation of their own, same as the two above.
+    piSendStatus();
+    piSendBattery();
 }
 
 static void processNewMessage(uint8_t msgId) {

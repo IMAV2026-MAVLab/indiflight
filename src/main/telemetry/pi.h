@@ -36,6 +36,13 @@ void checkPiTelemetryState(void);
 void freePiTelemetryPort(void);
 void configurePiTelemetryPort(void);
 
+// Keep in sync with the host-side decode (PI_STATUS.yaml field comment).
+#define PI_STATUS_FLAG_ARMED              (1 << 0)
+#define PI_STATUS_FLAG_PI_OVERRIDE_ACTIVE (1 << 1)
+#define PI_STATUS_FLAG_RX_LINK_VALID      (1 << 2)
+
 void piSendEkfInputs(void);
 void piSendIMU(void);
 void piSendAux(void);
+void piSendStatus(void);
+void piSendBattery(void);
