@@ -248,14 +248,8 @@ void initEkf(timeUs_t currentTimeUs) {
 
 void updateEkf(timeUs_t currentTimeUs) {
 #ifdef USE_TELEMETRY_PI
-    // stream inputs over serial, decimated to TASK_EKF/16. The condition is
-    // negated: sending on the 15 non-zero remainders instead would put 7.5kHz
-    // of 31-byte frames (232kB/s) on a 921600 baud link that carries 92kB/s,
-    // starving every other pi-protocol message. At 1-in-16 it is 500Hz, ~17%.
-    static unsigned counter = 0;
-    if (!(++counter % 16)) {
-        piSendEkfInputs();
-    }
+    // One frame per EKF step
+    piSendEkfInputs();
 #endif
 
     // --- check init and convergence
