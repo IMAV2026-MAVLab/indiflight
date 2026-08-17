@@ -152,7 +152,8 @@ void updatePosCtl(timeUs_t current) {
         // reset sticks, so that we can detect new stick movement later
         manual_takeover = false;
         setSticksReference();
-    } else if (!manual_takeover && ARMING_FLAG(ARMED) && haveSticksMoved()) {
+    } else if (!manual_takeover && ARMING_FLAG(ARMED)
+            && FLIGHT_MODE(POSITION_MODE | VELOCITY_MODE) && haveSticksMoved()) {
         manual_takeover = true;
         posSpNed.valid = false;
 #ifdef USE_TRAJECTORY_TRACKER
