@@ -175,21 +175,20 @@ void piSendEkfInputs(void)
     piMsgEkfInputsTx.p = (int16_t) ( ((float) ((1 << 15) - 1)) * gyro.gyroADCafterRpm[0] * 0.0005f );
     piMsgEkfInputsTx.q = (int16_t) ( ((float) ((1 << 15) - 1)) * gyro.gyroADCafterRpm[1] * 0.0005f );
     piMsgEkfInputsTx.r = (int16_t) ( ((float) ((1 << 15) - 1)) * gyro.gyroADCafterRpm[2] * 0.0005f );
+    // The allocator never writes omega[] past actNum, so an airframe with fewer
+    // rotors than the message carries would ship whatever is in those slots
+    int16_t omega[6] = {0};
 #ifdef USE_DSHOT_TELEMETRY
-    piMsgEkfInputsTx.omega1 = (int16_t) indiRun.omega[0];
-    piMsgEkfInputsTx.omega2 = (int16_t) indiRun.omega[1];
-    piMsgEkfInputsTx.omega3 = (int16_t) indiRun.omega[2];
-    piMsgEkfInputsTx.omega4 = (int16_t) indiRun.omega[3];
-    piMsgEkfInputsTx.omega5 = (int16_t) indiRun.omega[4];
-    piMsgEkfInputsTx.omega6 = (int16_t) indiRun.omega[5];
-#else
-    piMsgEkfInputsTx.omega1 = 0;
-    piMsgEkfInputsTx.omega2 = 0;
-    piMsgEkfInputsTx.omega3 = 0;
-    piMsgEkfInputsTx.omega4 = 0;
-    piMsgEkfInputsTx.omega5 = 0;
-    piMsgEkfInputsTx.omega6 = 0;
+    for (int i = 0; i < MIN(indiRun.actNum, 6); i++) {
+        omega[i] = (int16_t) indiRun.omega[i];
+    }
 #endif
+    piMsgEkfInputsTx.omega1 = omega[0];
+    piMsgEkfInputsTx.omega2 = omega[1];
+    piMsgEkfInputsTx.omega3 = omega[2];
+    piMsgEkfInputsTx.omega4 = omega[3];
+    piMsgEkfInputsTx.omega5 = omega[4];
+    piMsgEkfInputsTx.omega6 = omega[5];
 
     if (piPort) {
         piSendMsg(&piMsgEkfInputsTx, &serialWriter);
