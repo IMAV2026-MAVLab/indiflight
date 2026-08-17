@@ -148,8 +148,37 @@ void forceDeinitEkf(void) {
 }
 
 
+// Quaternion noise is left at the configured value even for a trusted sample:
+// qEkf is the attitude the inner loop flies on (flight/ahrs.c ahrsDecider).
+static void ekfSetMeasNoise(bool usePosition, bool trustPosition) {
+	float R[N_MEASUREMENTS] = {
+		((float) ekfConfig()->meas_noise_position[0]) * 1e-6f, // posN
+		((float) ekfConfig()->meas_noise_position[1]) * 1e-6f, // posE
+		((float) ekfConfig()->meas_noise_position[2]) * 1e-6f, // posD
+		((float) ekfConfig()->meas_noise_quat[0]) * 1e-6f, // qw
+		((float) ekfConfig()->meas_noise_quat[1]) * 1e-6f, // qx
+		((float) ekfConfig()->meas_noise_quat[2]) * 1e-6f, // qy
+		((float) ekfConfig()->meas_noise_quat[3]) * 1e-6f // qz
+	};
+
+	if (!usePosition) {
+		R[0] = EKF_IGNORED_MEAS_NOISE;
+		R[1] = EKF_IGNORED_MEAS_NOISE;
+		R[2] = EKF_IGNORED_MEAS_NOISE;
+	} else if (trustPosition) {
+		R[0] = EKF_TRUST_MEAS_NOISE_POS;
+		R[1] = EKF_TRUST_MEAS_NOISE_POS;
+		R[2] = EKF_TRUST_MEAS_NOISE_POS;
+	}
+
+	ekf_set_R(R);
+}
+
 void initEkf(timeUs_t currentTimeUs) {
+    // The initial state comes from the position, so a sample that does not
+    // offer one cannot seed the filter
     if ( !(posMeasNed.new)
+            || !(posMeasNed.mode & LOCAL_POS_MEAS_USE_POS)
             || (cmpTimeUs(currentTimeUs, posMeasNed.time_us) > EKF_MAX_MEAS_AGE_US) ) {
         return;
     }
@@ -158,6 +187,7 @@ void initEkf(timeUs_t currentTimeUs) {
 	// set ekf parameters
 	bool use_quat = ekfConfig()->use_quat_measurement;
     use_quat &= posMeasNed.quat_valid;
+    use_quat &= (posMeasNed.mode & LOCAL_POS_MEAS_USE_QUAT) != 0;
 
 	// process noise covariance
 	float Q[N_STATES] = {
@@ -175,23 +205,13 @@ void initEkf(timeUs_t currentTimeUs) {
 		((float) ekfConfig()->proc_noise_gyro_bias[2]) * 1e-6f // r
 	};
 
-	// measurement noise covariance
-	float R[N_MEASUREMENTS] = {
-		((float) ekfConfig()->meas_noise_position[0]) * 1e-6f, // posN
-		((float) ekfConfig()->meas_noise_position[1]) * 1e-6f, // posE
-		((float) ekfConfig()->meas_noise_position[2]) * 1e-6f, // posD
-		((float) ekfConfig()->meas_noise_quat[0]) * 1e-6f, // qw
-		((float) ekfConfig()->meas_noise_quat[1]) * 1e-6f, // qx
-		((float) ekfConfig()->meas_noise_quat[2]) * 1e-6f, // qy
-		((float) ekfConfig()->meas_noise_quat[3]) * 1e-6f // qz
-	};
 
     // sets initial state to the latest external pos and att
 	float X0[N_STATES] = {
 		posMeasNed.pos.V.X,
 		posMeasNed.pos.V.Y,
 		posMeasNed.pos.V.Z,
-		0., 0., 0., // vel
+		posMeasNed.vel.V.X, posMeasNed.vel.V.Y, posMeasNed.vel.V.Z,
         1., 0., 0., 0., // quaternion
 		0., 0., 0., 0., 0., 0. // acc and gyro biases
 	};
@@ -238,7 +258,7 @@ void initEkf(timeUs_t currentTimeUs) {
 	// initialize ekf
     ekf_set_use_quat(use_quat);
 	ekf_set_Q(Q);
-	ekf_set_R(R);
+	ekfSetMeasNoise(true, false);
 	ekf_set_X(X0);
 	ekf_set_P_diag(P_diag0);
 	ekf_initialized = true;
@@ -359,14 +379,27 @@ void updateEkf(timeUs_t currentTimeUs) {
 
         bool use_quat = ekfConfig()->use_quat_measurement;
         use_quat &= posMeasNed.quat_valid;
+        use_quat &= (posMeasNed.mode & LOCAL_POS_MEAS_USE_QUAT) != 0;
 
         ekf_Z[3] = (use_quat) * posMeasNed.quat.w;
         ekf_Z[4] = (use_quat) * posMeasNed.quat.x;
         ekf_Z[5] = (use_quat) * posMeasNed.quat.y;
         ekf_Z[6] = (use_quat) * posMeasNed.quat.z;
 
+		ekfSetMeasNoise(
+			posMeasNed.mode & LOCAL_POS_MEAS_USE_POS,
+			posMeasNed.mode & LOCAL_POS_MEAS_TRUST);
+
 		// old update:
 		ekf_update(ekf_Z);
+
+		if (posMeasNed.mode & LOCAL_POS_MEAS_USE_VEL) {
+			// Velocity has no measurement rows, so writing the state is the only way in
+			float *X = ekf_get_X();
+			X[3] = posMeasNed.vel.V.X;
+			X[4] = posMeasNed.vel.V.Y;
+			X[5] = posMeasNed.vel.V.Z;
+		}
 
 		// new update that takes into account the time delay:
 		// ekf_update_delayed(ekf_Z, posLatestMsgTime * 1e-6);

@@ -51,6 +51,13 @@ typedef struct ekfConfig_s {
 PG_DECLARE(ekfConfig_t, ekfConfig);
 
 #define EKF_MAX_MEAS_AGE_US 100000   // 0.1 seconds
+// Position measurement covariance used by a LOCAL_POS_MEAS_TRUST sample, m^2.
+// Not zero: chol() runs in float32 without a guard and the covariance update is
+// not in a symmetry-preserving form.
+#define EKF_TRUST_MEAS_NOISE_POS 1e-6f
+// Covariance that makes the Kalman gain of a row negligible, for a quantity the
+// sample says not to use, m^2.
+#define EKF_IGNORED_MEAS_NOISE   1e6f
 #define EKF_DEINIT_TIMEOUT 500000    // 0.5 seconds
 #define EKF_CONVERGE_TIME_US 2000000 // 2 seconds
 
