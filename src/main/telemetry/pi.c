@@ -54,6 +54,7 @@
 #include "flight/indi.h"
 #include "flight/failsafe.h"
 #include "flight/position.h"
+#include "flight/ekf.h"
 
 #include "io/serial.h"
 #include "io/gimbal.h"
@@ -193,26 +194,39 @@ void piSendEkfInputs(void)
     }
 }
 
-void piSendAux(void)
+// Straight from the RX driver: before PI OVERRIDE substitutes a channel and
+// before the calibration, so this is the pilot in the receiver's native range.
+static int16_t piReadRcChannel(uint8_t wireChannel)
 {
-    piMsgAuxTx.time_us = micros();
-    piMsgAuxTx.aux_1 = (int16_t) rcData[AUX1 + 0];
-    piMsgAuxTx.aux_2 = (int16_t) rcData[AUX1 + 1];
-    piMsgAuxTx.aux_3 = (int16_t) rcData[AUX1 + 2];
-    piMsgAuxTx.aux_4 = (int16_t) rcData[AUX1 + 3];
-    piMsgAuxTx.aux_5 = (int16_t) rcData[AUX1 + 4];
-    piMsgAuxTx.aux_6 = (int16_t) rcData[AUX1 + 5];
-    piMsgAuxTx.aux_7 = (int16_t) rcData[AUX1 + 6];
-    piMsgAuxTx.aux_8 = (int16_t) rcData[AUX1 + 7];
-    piMsgAuxTx.aux_9 = (int16_t) rcData[AUX1 + 8];
-    piMsgAuxTx.aux_10 = (int16_t) rcData[AUX1 + 9];
-    piMsgAuxTx.aux_11 = (int16_t) rcData[AUX1 + 10];
-    piMsgAuxTx.aux_12 = (int16_t) rcData[AUX1 + 11];
-    piMsgAuxTx.aux_13 = (int16_t) rcData[AUX1 + 12];
-    piMsgAuxTx.aux_14 = (int16_t) rcData[AUX1 + 13];
+    if (wireChannel >= rxRuntimeState.channelCount) {
+        return 0;
+    }
+
+    return (int16_t) rxRuntimeState.rcReadRawFn(&rxRuntimeState, wireChannel);
+}
+
+void piSendRc(void)
+{
+    piMsgRcTx.time_us = micros();
+    piMsgRcTx.channel_1 = piReadRcChannel(0);
+    piMsgRcTx.channel_2 = piReadRcChannel(1);
+    piMsgRcTx.channel_3 = piReadRcChannel(2);
+    piMsgRcTx.channel_4 = piReadRcChannel(3);
+    piMsgRcTx.channel_5 = piReadRcChannel(4);
+    piMsgRcTx.channel_6 = piReadRcChannel(5);
+    piMsgRcTx.channel_7 = piReadRcChannel(6);
+    piMsgRcTx.channel_8 = piReadRcChannel(7);
+    piMsgRcTx.channel_9 = piReadRcChannel(8);
+    piMsgRcTx.channel_10 = piReadRcChannel(9);
+    piMsgRcTx.channel_11 = piReadRcChannel(10);
+    piMsgRcTx.channel_12 = piReadRcChannel(11);
+    piMsgRcTx.channel_13 = piReadRcChannel(12);
+    piMsgRcTx.channel_14 = piReadRcChannel(13);
+    piMsgRcTx.channel_15 = piReadRcChannel(14);
+    piMsgRcTx.channel_16 = piReadRcChannel(15);
 
     if (piPort) {
-        piSendMsg(&piMsgAuxTx, &serialWriter);
+        piSendMsg(&piMsgRcTx, &serialWriter);
     }
 }
 
@@ -224,17 +238,19 @@ void piSendStatus(void)
     if (ARMING_FLAG(ARMED)) {
         flags |= PI_STATUS_FLAG_ARMED;
     }
-    // Bit 1 means "the FC is obeying the offboard command channel this airframe
-    // uses", which here is POS_SETPOINT. POSITION_MODE is gated on BOXPOSCTL
-    // *and* a converged EKF (fc/core.c), so it only sets once setpoints are
-    // really being tracked - the box mode alone would read ready too early.
-    // Builds driven over RC_OVERRIDE report BOXPIOVERRIDE in this same bit.
+    // Which control family the pilot's switches have selected, so that the host
+    // knows which of the two offboard languages the FC is currently obeying.
     if (FLIGHT_MODE(POSITION_MODE)) {
-        flags |= PI_STATUS_FLAG_PI_OVERRIDE_ACTIVE;
+        flags |= PI_STATUS_FLAG_POS_CTL_ACTIVE;
     }
     if (rxAreFlightChannelsValid()) {
         flags |= PI_STATUS_FLAG_RX_LINK_VALID;
     }
+#ifdef USE_EKF
+    if (isConvergedEkf()) {
+        flags |= PI_STATUS_FLAG_EKF_CONVERGED;
+    }
+#endif
     piMsgPiStatusTx.flags = flags;
 
     if (piPort) {
@@ -258,19 +274,30 @@ void processPiTelemetry(void)
 {
     // handled event based now, whenever there is stuff to be send, those functions
     // call piSendEkfInputs, or similar. More boilerplate, but lower latency
-    piSendAux();
     piSendIMU();
-    // TASK_TELEMETRY already runs at TELEMETRY_PI_MAXRATE, so these need no
-    // decimation of their own, same as the two above.
+
+    piSendRc();
     piSendStatus();
     piSendBattery();
 }
 
 static void processNewMessage(uint8_t msgId) {
     switch (msgId) {
+        case PI_MSG_TIMESYNC_ID: {
+            // Answered here rather than from the send path: any delay added
+            // between the two stamps is offset error for the host
+            piMsgTimesyncTx.seq = piMsgTimesyncRx->seq;
+            piMsgTimesyncTx.host_ns = piMsgTimesyncRx->host_ns;
+            piMsgTimesyncTx.fc_time_us = micros();
+            if (piPort) {
+                piSendMsg(&piMsgTimesyncTx, &serialWriter);
+            }
+            break;
+        }
 #ifdef USE_LOCAL_POSITION
         case PI_MSG_EXTERNAL_POSE_ID: {
             local_pos_ned_t pos;
+            pos.mode = piMsgExternalPoseRx->mode;
             pos.time_us = piMsgExternalPoseRx->time_us;
             pos.source = LOCAL_POS_SOURCE_PI;
             // process new message (should be NED)
@@ -292,18 +319,28 @@ static void processNewMessage(uint8_t msgId) {
             setLocalPosMeas(&pos);
             break;
         }
-        case PI_MSG_POS_SETPOINT_ID: {
-            local_pos_sp_ned_t sp;
-            sp.time_us = piMsgPosSetpointRx->time_us;
+        case PI_MSG_SETPOINT_ID: {
+            local_pos_sp_ned_t sp = {0};
+            sp.mode = piMsgSetpointRx->mode;
+
+            // The position controller implements nothing else yet, and vec_a
+            // does not mean a position in the modes it does not implement
+            if (sp.mode != LOCAL_POS_SP_POSITION) {
+                break;
+            }
+
+            sp.time_us = piMsgSetpointRx->time_us;
             sp.source = LOCAL_POS_SOURCE_PI;
-            sp.pos.V.X = piMsgPosSetpointRx->ned_x;
-            sp.pos.V.Y = piMsgPosSetpointRx->ned_y;
-            sp.pos.V.Z = piMsgPosSetpointRx->ned_z;
-            sp.vel.V.X = piMsgPosSetpointRx->ned_xd;
-            sp.vel.V.Y = piMsgPosSetpointRx->ned_yd;
-            sp.vel.V.Z = piMsgPosSetpointRx->ned_zd;
-            sp.psi = DEGREES_TO_RADIANS(piMsgPosSetpointRx->yaw);
+            sp.pos.V.X = piMsgSetpointRx->vec_a_x;
+            sp.pos.V.Y = piMsgSetpointRx->vec_a_y;
+            sp.pos.V.Z = piMsgSetpointRx->vec_a_z;
+            sp.vel.V.X = piMsgSetpointRx->vec_b_x;
+            sp.vel.V.Y = piMsgSetpointRx->vec_b_y;
+            sp.vel.V.Z = piMsgSetpointRx->vec_b_z;
+
+            sp.psi = piMsgSetpointRx->scalar_c;
             sp.trackPsi = true;
+
             setLocalPosSp(&sp);
             break;
         }

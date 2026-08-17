@@ -40,9 +40,11 @@ void configurePiTelemetryPort(void);
 #define PI_STATUS_FLAG_ARMED              (1 << 0)
 #define PI_STATUS_FLAG_PI_OVERRIDE_ACTIVE (1 << 1)
 #define PI_STATUS_FLAG_RX_LINK_VALID      (1 << 2)
+#define PI_STATUS_FLAG_EKF_CONVERGED      (1 << 3)
+#define PI_STATUS_FLAG_POS_CTL_ACTIVE     (1 << 4)
 
 void piSendEkfInputs(void);
 void piSendIMU(void);
-void piSendAux(void);
+void piSendRc(void);
 void piSendStatus(void);
 void piSendBattery(void);

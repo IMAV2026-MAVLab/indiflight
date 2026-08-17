@@ -36,6 +36,21 @@ typedef enum {
 } local_pos_source_e;
 
 // todo: reformulate using fp_vector_t
+// Which quantities of a measurement to use, see msgs/EXTERNAL_POSE.yaml
+#define LOCAL_POS_MEAS_USE_POS   (1 << 0)
+#define LOCAL_POS_MEAS_USE_QUAT  (1 << 1)
+#define LOCAL_POS_MEAS_USE_VEL   (1 << 2)
+#define LOCAL_POS_MEAS_TRUST     (1 << 3)
+
+// What the controller does with a setpoint, see msgs/SETPOINT.yaml
+#define LOCAL_POS_SP_MODE_MASK   0x07
+#define LOCAL_POS_SP_POSITION    0
+#define LOCAL_POS_SP_VELOCITY    1
+#define LOCAL_POS_SP_TRAJECTORY  2
+#define LOCAL_POS_SP_ATTITUDE    3
+#define LOCAL_POS_SP_ACRO        4
+#define LOCAL_POS_SP_YAW_RATE    (1 << 3)
+
 typedef struct __local_pos_ned_t {
     uint32_t time_us;
     local_pos_source_e source;
@@ -45,6 +60,7 @@ typedef struct __local_pos_ned_t {
     fp_vector_t vel;
     bool quat_valid;
     fp_quaternion_t quat;
+    uint8_t mode;
 } local_pos_ned_t;
 
 typedef struct __local_pos_sp_ned_t {
@@ -54,7 +70,9 @@ typedef struct __local_pos_sp_ned_t {
     fp_vector_t pos;
     fp_vector_t vel;
     float psi;
+    float psi_rate;
     bool trackPsi;
+    uint8_t mode;
 } local_pos_sp_ned_t;
 
 extern local_pos_ned_t posMeasNed;
