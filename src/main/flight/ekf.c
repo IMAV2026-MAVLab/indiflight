@@ -326,8 +326,11 @@ void updateEkf(timeUs_t currentTimeUs) {
 	lastPredictTimeUs = currentTimeUs;
 
 	// UPDATE STEP 			(only when new measurement is available)
-	if ( posMeasNed.new 
-            && cmpTimeUs(posMeasNed.time_us, currentTimeUs) <= EKF_MAX_MEAS_AGE_US) {
+    // Band, so that neither a stale nor an implausibly future stamp is fused
+    const timeDelta_t measAgeUs = cmpTimeUs(currentTimeUs, posMeasNed.time_us);
+	if ( posMeasNed.new
+            && measAgeUs <= EKF_MAX_MEAS_AGE_US
+            && measAgeUs > -EKF_MAX_MEAS_AGE_US) {
 
         posMeasNed.new = false;
 

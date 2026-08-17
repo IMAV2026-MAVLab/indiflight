@@ -57,6 +57,11 @@ local_pos_ned_t posMeasNed;
 local_pos_sp_ned_t posSpNed;
 
 void setLocalPosMeas(local_pos_ned_t* pos) {
+    // Age checks elsewhere compute (now - stamp), which a future stamp defeats
+    if (cmpTimeUs(pos->time_us, micros()) > EKF_MAX_MEAS_AGE_US) {
+        return;
+    }
+
     if ( (cmpTimeUs(pos->time_us, posMeasNed.time_us) > 0)
             && ( pos->source == ekfConfig()->meas_source
                 || pos->source == LOCAL_POS_SOURCE_MOCKUP ) // always accept MOCKUP
