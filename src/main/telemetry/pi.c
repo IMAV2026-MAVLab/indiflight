@@ -46,6 +46,7 @@
 
 #include "config/config.h"
 #include "fc/rc_controls.h"
+#include "fc/rc_modes.h"
 #include "fc/runtime_config.h"
 
 #include "flight/mixer.h"
@@ -63,6 +64,7 @@
 #include "io/local_pos.h"
 
 #include "rx/rx.h"
+#include "rx/pi_override.h"
 
 #include "sensors/sensors.h"
 #include "sensors/acceleration.h"
@@ -243,6 +245,11 @@ void piSendStatus(void)
     if (FLIGHT_MODE(POSITION_MODE)) {
         flags |= PI_STATUS_FLAG_POS_CTL_ACTIVE;
     }
+#if defined(USE_RX_PI_OVERRIDE)
+    if (IS_RC_MODE_ACTIVE(BOXPIOVERRIDE)) {
+        flags |= PI_STATUS_FLAG_PI_OVERRIDE_ACTIVE;
+    }
+#endif
     if (rxAreFlightChannelsValid()) {
         flags |= PI_STATUS_FLAG_RX_LINK_VALID;
     }
@@ -290,6 +297,13 @@ void processPiTelemetry(void)
 
 static void processNewMessage(uint8_t msgId) {
     switch (msgId) {
+#if defined(USE_RX_PI_OVERRIDE)
+        case PI_MSG_RC_OVERRIDE_ID: {
+            rxPiOverrideFrameReceive(piMsgRcOverrideRx->roll, piMsgRcOverrideRx->pitch,
+                piMsgRcOverrideRx->yaw, piMsgRcOverrideRx->throttle);
+            break;
+        }
+#endif
         case PI_MSG_TIMESYNC_ID: {
             // Answered here rather than from the send path: any delay added
             // between the two stamps is offset error for the host

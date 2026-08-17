@@ -147,6 +147,7 @@ COMMON_SRC = \
             rx/xbus.c \
             rx/fport.c \
             rx/msp_override.c \
+            rx/pi_override.c \
             sensors/acceleration.c \
             sensors/acceleration_init.c \
             sensors/boardalignment.c \

@@ -98,6 +98,7 @@ static const box_t boxes[CHECKBOX_ITEM_COUNT] = {
     { .boxId = BOXVTXCONTROLDISABLE, .boxName = "VTX CONTROL DISABLE", .permanentId = 48},
     { .boxId = BOXLAUNCHCONTROL, .boxName = "LAUNCH CONTROL", .permanentId = 49 },
     { .boxId = BOXMSPOVERRIDE, .boxName = "MSP OVERRIDE", .permanentId = 50},
+    { .boxId = BOXPIOVERRIDE, .boxName = "PI OVERRIDE", .permanentId = 62},
     { .boxId = BOXSTICKCOMMANDDISABLE, .boxName = "STICK COMMANDS DISABLE", .permanentId = 51},
     { .boxId = BOXBEEPERMUTE, .boxName = "BEEPER MUTE", .permanentId = 52},
     { .boxId = BOXREADY, .boxName = "READY", .permanentId = 53},
@@ -356,6 +357,12 @@ void initActiveBoxIds(void)
 #if defined(USE_RX_MSP_OVERRIDE)
     if (rxConfig()->msp_override_channels_mask) {
         BME(BOXMSPOVERRIDE);
+    }
+#endif
+
+#if defined(USE_RX_PI_OVERRIDE)
+    if (rxConfig()->pi_override_channels_mask) {
+        BME(BOXPIOVERRIDE);
     }
 #endif
 
