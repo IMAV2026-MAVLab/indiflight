@@ -98,7 +98,7 @@ void setLocalPosSp(local_pos_sp_ned_t* sp) {
 
 void setLocalPosSpHere(void) {
     if (isConvergedEkf()) {
-        local_pos_sp_ned_t sp;
+        local_pos_sp_ned_t sp = {0};
         sp.time_us = micros();
         sp.pos = posEstNed;
         sp.trackPsi = false;

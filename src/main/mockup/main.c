@@ -92,7 +92,7 @@ void setMocap(const float *pos, const float *vel, const float *q) {
 }
 
 void setMocapT(const float *pos, const float *vel, const float *q, const uint32_t time_us) {
-    local_pos_ned_t new_pos;
+    local_pos_ned_t new_pos = {0};
 
     new_pos.source = LOCAL_POS_SOURCE_MOCKUP;
     new_pos.time_us = time_us;
@@ -112,7 +112,7 @@ void setMocapT(const float *pos, const float *vel, const float *q, const uint32_
 }
 
 void setPosSetpoint(const float *pos, const float yaw) {
-    local_pos_sp_ned_t sp;
+    local_pos_sp_ned_t sp = {0};
 
     sp.source = LOCAL_POS_SOURCE_MOCKUP;
     sp.time_us = micros();
