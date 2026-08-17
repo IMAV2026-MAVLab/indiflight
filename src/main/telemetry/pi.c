@@ -276,9 +276,16 @@ void processPiTelemetry(void)
     // call piSendEkfInputs, or similar. More boilerplate, but lower latency
     piSendIMU();
 
-    piSendRc();
-    piSendStatus();
-    piSendBattery();
+    // Downlink rate, decoupled from the task period the uplink needs
+    static timeUs_t lastDownlinkUs = 0;
+    const timeUs_t now = micros();
+
+    if (cmpTimeUs(now, lastDownlinkUs) >= TELEMETRY_PI_DELAY) {
+        lastDownlinkUs = now;
+        piSendRc();
+        piSendStatus();
+        piSendBattery();
+    }
 }
 
 static void processNewMessage(uint8_t msgId) {
