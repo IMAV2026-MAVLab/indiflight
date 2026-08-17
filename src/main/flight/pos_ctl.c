@@ -123,6 +123,7 @@ fp_vector_t rateSpBodyFromPos = { .V.X = 0., .V.Y = 0., .V.Z = 0. };
 
 // locals
 fp_vector_t velIErrorBody = {0};
+static void posGetOffboardAttitudeSp(void);
 static void posGetYawRateSpBody(void);
 
 void resetIterms(void) {
@@ -155,6 +156,16 @@ void updatePosCtl(timeUs_t current) {
     if (sp_mode != last_sp_mode) {
         last_sp_mode = sp_mode;
         resetIterms();
+    }
+
+    if (sp_mode >= LOCAL_POS_SP_ATTITUDE) {
+        if (cmpTimeUs(current, posSpNed.time_us) < SETPOINT_TIMEOUT_US) {
+            posGetOffboardAttitudeSp();
+            return;
+        }
+        // Stale, and vec_a no longer means a position: fall back to levelling
+        posSpNed.mode = LOCAL_POS_SP_POSITION;
+        posSpNed.valid = false;
     }
 
     if (manual_takeover && posSpNed.valid) {
@@ -275,6 +286,24 @@ void updatePosCtl(timeUs_t current) {
 
     // always use NDI function to map acc setpoints
     posGetAttSpNedAndSpfSpBody(current);
+}
+
+// Attitude and acro references reach the INDI unchanged, see msgs/SETPOINT.yaml
+static void posGetOffboardAttitudeSp(void) {
+    spfSpBodyFromPos = posSpNed.vel;
+
+    if ((posSpNed.mode & LOCAL_POS_SP_MODE_MASK) == LOCAL_POS_SP_ACRO) {
+        rateSpBodyFromPos = posSpNed.pos;
+        return;
+    }
+
+    attSpNedFromPos.w = posSpNed.psi;
+    attSpNedFromPos.x = posSpNed.pos.V.X;
+    attSpNedFromPos.y = posSpNed.pos.V.Y;
+    attSpNedFromPos.z = posSpNed.pos.V.Z;
+    rateSpBodyFromPos.V.X = 0.f;
+    rateSpBodyFromPos.V.Y = 0.f;
+    rateSpBodyFromPos.V.Z = 0.f;
 }
 
 // Zero rate while the attitude loop owns yaw; the commanded rate otherwise.

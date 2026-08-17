@@ -89,7 +89,7 @@ void posCtlInit(void);
 // own, rather than for a crawl. AS2 sends zero to mean exactly that.
 #define POS_MIN_COMMANDED_SPEED        0.2f     // m/s
 
-// Age past which a velocity setpoint stops being tracked
+// Age past which a velocity, attitude or acro setpoint stops being tracked
 #define SETPOINT_TIMEOUT_US            200000   // 0.2 sec
 
 extern positionRuntime_t posRuntime;

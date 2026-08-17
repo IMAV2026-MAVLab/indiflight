@@ -1102,9 +1102,9 @@ void processRxModes(timeUs_t currentTimeUs)
                 stopTrajectoryTracker();
             }
 #endif
-            // only switch if converged ekf
-            if (isConvergedEkf()) {
-                if (ARMING_FLAG(ARMED)) {
+            // only switch if converged ekf, unless the reference does not need it
+            if (!localPosSpNeedsEkf() || isConvergedEkf()) {
+                if (ARMING_FLAG(ARMED) && localPosSpNeedsEkf()) {
                     setLocalPosSpHere();
                 }
                 ENABLE_FLIGHT_MODE(POSITION_MODE);

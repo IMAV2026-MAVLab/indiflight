@@ -170,6 +170,7 @@ void getSetpoints(timeUs_t current) {
 #endif
 #ifdef USE_LOCAL_POSITION
     if (FLIGHT_MODE(POSITION_MODE) || FLIGHT_MODE(VELOCITY_MODE)) {
+        indiRun.controlAttitude = (posSpNed.mode & LOCAL_POS_SP_MODE_MASK) != LOCAL_POS_SP_ACRO;
         indiRun.attSpNed = attSpNedFromPos;
         indiRun.trackAttitudeYaw = posSpNed.trackPsi;
         indiRun.spfSpBody = spfSpBodyFromPos;

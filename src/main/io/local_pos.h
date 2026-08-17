@@ -82,6 +82,11 @@ void setLocalPosMeas(local_pos_ned_t* pos);
 void setLocalPosSp(local_pos_sp_ned_t* sp);
 void setLocalPosSpHere(void);
 
+// ATTITUDE and ACRO command the INDI directly, so they need no state estimate
+static inline bool localPosSpNeedsEkf(void) {
+    return (posSpNed.mode & LOCAL_POS_SP_MODE_MASK) < LOCAL_POS_SP_ATTITUDE;
+}
+
 void llh_to_local(const gpsLocation_t* llh, const gpsLocation_t* home, fp_vector_t* ned);
 void local_to_llh(const fp_vector_t* ned, const gpsLocation_t* home, gpsLocation_t* llh);
 

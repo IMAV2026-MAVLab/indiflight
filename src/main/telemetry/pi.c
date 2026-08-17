@@ -344,9 +344,7 @@ static void processNewMessage(uint8_t msgId) {
             local_pos_sp_ned_t sp = {0};
             sp.mode = piMsgSetpointRx->mode;
 
-            // ATTITUDE and ACRO command the INDI directly and never reach the
-            // position controller, so it cannot hold them as a setpoint
-            if ((sp.mode & LOCAL_POS_SP_MODE_MASK) > LOCAL_POS_SP_TRAJECTORY) {
+            if ((sp.mode & LOCAL_POS_SP_MODE_MASK) > LOCAL_POS_SP_ACRO) {
                 break;
             }
 
@@ -359,7 +357,10 @@ static void processNewMessage(uint8_t msgId) {
             sp.vel.V.Y = piMsgSetpointRx->vec_b_y;
             sp.vel.V.Z = piMsgSetpointRx->vec_b_z;
 
-            if (sp.mode & LOCAL_POS_SP_YAW_RATE) {
+            // The yaw rate bit only applies to modes 0-2: ATTITUDE carries yaw
+            // in the quaternion w it puts in scalar_c, and ACRO in vec_a
+            if ((sp.mode & LOCAL_POS_SP_YAW_RATE)
+                    && ((sp.mode & LOCAL_POS_SP_MODE_MASK) <= LOCAL_POS_SP_TRAJECTORY)) {
                 sp.psi_rate = piMsgSetpointRx->scalar_c;
                 sp.trackPsi = false;
             } else {
