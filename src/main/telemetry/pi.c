@@ -344,9 +344,9 @@ static void processNewMessage(uint8_t msgId) {
             local_pos_sp_ned_t sp = {0};
             sp.mode = piMsgSetpointRx->mode;
 
-            // The position controller implements nothing else yet, and vec_a
-            // does not mean a position in the modes it does not implement
-            if (sp.mode != LOCAL_POS_SP_POSITION) {
+            // ATTITUDE and ACRO command the INDI directly and never reach the
+            // position controller, so it cannot hold them as a setpoint
+            if ((sp.mode & LOCAL_POS_SP_MODE_MASK) > LOCAL_POS_SP_TRAJECTORY) {
                 break;
             }
 
@@ -359,8 +359,13 @@ static void processNewMessage(uint8_t msgId) {
             sp.vel.V.Y = piMsgSetpointRx->vec_b_y;
             sp.vel.V.Z = piMsgSetpointRx->vec_b_z;
 
-            sp.psi = piMsgSetpointRx->scalar_c;
-            sp.trackPsi = true;
+            if (sp.mode & LOCAL_POS_SP_YAW_RATE) {
+                sp.psi_rate = piMsgSetpointRx->scalar_c;
+                sp.trackPsi = false;
+            } else {
+                sp.psi = piMsgSetpointRx->scalar_c;
+                sp.trackPsi = true;
+            }
 
             setLocalPosSp(&sp);
             break;

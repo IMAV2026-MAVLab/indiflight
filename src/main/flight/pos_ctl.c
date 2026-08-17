@@ -123,6 +123,8 @@ fp_vector_t rateSpBodyFromPos = { .V.X = 0., .V.Y = 0., .V.Z = 0. };
 
 // locals
 fp_vector_t velIErrorBody = {0};
+static void posGetYawRateSpBody(void);
+
 void resetIterms(void) {
     velIErrorBody.V.X = 0.f;
     velIErrorBody.V.Y = 0.f;
@@ -146,6 +148,14 @@ void updatePosCtl(timeUs_t current) {
     timeDelta_t timeInDeadreckoning = cmpTimeUs(current, posMeasNed.time_us);
     static bool latch_descend = false;
     static bool manual_takeover = false;
+
+    // the integrator is only meaningful within one setpoint interpretation
+    static uint8_t last_sp_mode = LOCAL_POS_SP_POSITION;
+    const uint8_t sp_mode = posSpNed.mode & LOCAL_POS_SP_MODE_MASK;
+    if (sp_mode != last_sp_mode) {
+        last_sp_mode = sp_mode;
+        resetIterms();
+    }
 
     if (manual_takeover && posSpNed.valid) {
         // no more manual control because new setpoint received
@@ -244,12 +254,18 @@ void updatePosCtl(timeUs_t current) {
                     posSpNed.time_us = current;
                     resetIterms();
                 }
+            } else if ((posSpNed.mode & LOCAL_POS_SP_MODE_MASK) == LOCAL_POS_SP_VELOCITY) {
+                // a velocity setpoint is a standing order, so it expires
+                if (cmpTimeUs(current, posSpNed.time_us) > SETPOINT_TIMEOUT_US) {
+                    posArrestMotion();
+                } else {
+                    posConstrainVelSp(posRuntime.horz_max_v);
+                }
+                posGetYawRateSpBody();
             } else {
                 // normal position control
                 posGetVelSpNedFromPosSp();
-                rateSpBodyFromPos.V.X = 0; // TODO: implement weathervaning?
-                rateSpBodyFromPos.V.Y = 0;
-                rateSpBodyFromPos.V.Z = 0;
+                posGetYawRateSpBody(); // TODO: implement weathervaning?
             }
 
             // convert velocity setpoint to acceleration setpoint
@@ -261,10 +277,38 @@ void updatePosCtl(timeUs_t current) {
     posGetAttSpNedAndSpfSpBody(current);
 }
 
+// Zero rate while the attitude loop owns yaw; the commanded rate otherwise.
+static void posGetYawRateSpBody(void) {
+    if (posSpNed.trackPsi) {
+        rateSpBodyFromPos.V.X = 0;
+        rateSpBodyFromPos.V.Y = 0;
+        rateSpBodyFromPos.V.Z = 0;
+    } else {
+        rateSpBodyFromPos = coordinatedYaw(posSpNed.psi_rate);
+    }
+}
+
+void posConstrainVelSp(float maxHorzV) {
+    VEC3_CONSTRAIN_XY_LENGTH(posSpNed.vel, maxHorzV);
+
+    posSpNed.vel.V.Z = constrainf(posSpNed.vel.V.Z, -posRuntime.vert_max_v_up, posRuntime.vert_max_v_down);
+}
+
 void posGetVelSpNedFromPosSp(void) {
     // precalculations
     float horzPCasc = posRuntime.horz_p / posRuntime.horz_d; // emulate parallel PD with Casc system
     float vertPCasc = posRuntime.vert_p / posRuntime.vert_d; // emulate parallel PD with Casc system
+
+    // the commanded vector is a speed limit or a feedforward, per the mode
+    const fp_vector_t commandedVel = posSpNed.vel;
+    const uint8_t mode = posSpNed.mode & LOCAL_POS_SP_MODE_MASK;
+    float maxHorzV = posRuntime.horz_max_v;
+    if (mode == LOCAL_POS_SP_POSITION) {
+        const float commandedHorzV = VEC3_XY_LENGTH(commandedVel);
+        if (commandedHorzV > POS_MIN_COMMANDED_SPEED) {
+            maxHorzV = MIN(maxHorzV, commandedHorzV);
+        }
+    }
 
     // pos error = pos setpoint - pos estimate
     fp_vector_t posError = posSpNed.pos;
@@ -275,10 +319,12 @@ void posGetVelSpNedFromPosSp(void) {
     posSpNed.vel.V.Y = posError.V.Y * horzPCasc;
     posSpNed.vel.V.Z = posError.V.Z * vertPCasc;
 
-    // constrain magnitude here
-    VEC3_CONSTRAIN_XY_LENGTH(posSpNed.vel, posRuntime.horz_max_v);
+    if (mode == LOCAL_POS_SP_TRAJECTORY) {
+        VEC3_SCALAR_MULT_ADD(posSpNed.vel, 1.0f, commandedVel);
+    }
 
-    posSpNed.vel.V.Z = constrainf(posSpNed.vel.V.Z, -posRuntime.vert_max_v_up, posRuntime.vert_max_v_down);
+    // constrain magnitude here
+    posConstrainVelSp(maxHorzV);
 }
 
 void posGetVelSpNedFromSticks(void) {

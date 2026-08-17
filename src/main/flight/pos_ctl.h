@@ -85,6 +85,13 @@ void posCtlInit(void);
 #define DEADRECKONING_TIMEOUT_HOLD_POSITION_US  2000000  // 1 sec
 #define DEADRECKONING_TIMEOUT_DESCEND_SLOWLY_US 3500000  // 2.5 sec
 
+// Commanded speed below which POSITION is taken to ask for no limit of its
+// own, rather than for a crawl. AS2 sends zero to mean exactly that.
+#define POS_MIN_COMMANDED_SPEED        0.2f     // m/s
+
+// Age past which a velocity setpoint stops being tracked
+#define SETPOINT_TIMEOUT_US            200000   // 0.2 sec
+
 extern positionRuntime_t posRuntime;
 void initPositionRuntime();
 void changePositionProfile(uint8_t profileIndex);
@@ -94,6 +101,7 @@ extern fp_quaternion_t attSpNedFromPos;
 extern fp_vector_t spfSpBodyFromPos;
 extern fp_vector_t rateSpBodyFromPos;
 
+void posConstrainVelSp(float maxHorzV);
 void resetIterms();
 void posArrestMotion();
 void posArrestZMotionOnly();
