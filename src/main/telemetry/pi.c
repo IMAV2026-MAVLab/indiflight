@@ -31,6 +31,7 @@
 #include "common/maths.h"
 #include "common/axis.h"
 #include "common/color.h"
+#include "common/time.h"
 #include "common/utils.h"
 
 #include "config/feature.h"
@@ -128,6 +129,29 @@ void configurePiTelemetryPort(void)
     }
 
     piTelemetryEnabled = true;
+}
+
+// The exchange already carries the host's wall clock, so the message that
+// syncs the two clocks also dates the blackbox: a log writes rtcGetDateTime()
+// into its header when it opens, and the FC has no clock of its own to date it
+// with. Anything older than the firmware is a host that has not set its own
+// clock yet, and would date every log to 1970.
+#define PI_RTC_MIN_UNIX_SEC 1735689600  // 2025-01-01
+
+static void piSetRtcFromHost(uint64_t host_ns)
+{
+#ifdef USE_RTC_TIME
+    const int32_t secs = (int32_t)(host_ns / 1000000000ull);
+    if (secs < PI_RTC_MIN_UNIX_SEC) {
+        return;
+    }
+
+    const uint16_t millis = (uint16_t)((host_ns % 1000000000ull) / 1000000ull);
+    rtcTime_t t = rtcTimeMake(secs, millis);
+    rtcSet(&t);
+#else
+    UNUSED(host_ns);
+#endif
 }
 
 void checkPiTelemetryState(void)
@@ -312,6 +336,7 @@ static void processNewMessage(uint8_t msgId) {
             if (piPort) {
                 piSendMsg(&piMsgTimesyncTx, &serialWriter);
             }
+            piSetRtcFromHost(piMsgTimesyncRx->host_ns);
             break;
         }
 #ifdef USE_LOCAL_POSITION
