@@ -666,7 +666,14 @@ static const blackboxSimpleFieldDefinition_t blackboxSlowFields[] = {
 
     {"failsafePhase",         -1, UNSIGNED, PREDICT(0),      ENCODING(TAG2_3S32)},
     {"rxSignalReceived",      -1, UNSIGNED, PREDICT(0),      ENCODING(TAG2_3S32)},
-    {"rxFlightChannelsValid", -1, UNSIGNED, PREDICT(0),      ENCODING(TAG2_3S32)}
+    {"rxFlightChannelsValid", -1, UNSIGNED, PREDICT(0),      ENCODING(TAG2_3S32)},
+
+    // The wall clock instant the time field counts from, so a log can be placed
+    // on the host timeline on its own. Repeated in every slow frame rather than
+    // stated once in the header: the clock is often set after logging started,
+    // and two of them apart also measure how fast this board's clock runs.
+    {"timeEpochSec",          -1, UNSIGNED, PREDICT(0),      ENCODING(UNSIGNED_VB)},
+    {"timeEpochMs",           -1, UNSIGNED, PREDICT(0),      ENCODING(UNSIGNED_VB)}
 };
 
 
@@ -1581,6 +1588,23 @@ static void writeSlowFrame(void)
     values[1] = slowHistory.rxSignalReceived ? 1 : 0;
     values[2] = slowHistory.rxFlightChannelsValid ? 1 : 0;
     blackboxWriteTag2_3S32(values);
+
+    // Read here rather than in loadSlowState(): the slow frame is also written
+    // whenever that state differs from the last one, and a clock that advances
+    // every iteration would make every iteration differ.
+    uint32_t epochSec = 0;
+    uint32_t epochMs = 0;
+#ifdef USE_RTC_TIME
+    rtcTime_t wallClock;
+    if (rtcGet(&wallClock)) {
+        const rtcTime_t epoch = wallClock - (rtcTime_t)millis();
+        epochSec = (uint32_t)(epoch / 1000);
+        epochMs = (uint32_t)(epoch % 1000);
+    }
+#endif
+    // Zero until something sets the clock, which reads as no wall time here.
+    blackboxWriteUnsignedVB(epochSec);
+    blackboxWriteUnsignedVB(epochMs);
 
     blackboxSlowFrameIterationTimer = 0;
 }

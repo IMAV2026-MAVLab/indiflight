@@ -346,7 +346,6 @@ const uint32_t baudRates[] = {0, 9600, 19200, 38400, 57600, 115200, 230400, 2500
         400000, 460800, 500000, 921600, 1000000, 1500000, 2000000, 2470000}; // see baudRate_e
 uint8_t debugMode = 0;
 int16_t debug[DEBUG16_VALUE_COUNT];
-int32_t blackboxHeaderBudget;
 gpsSolutionData_t gpsSol;
 int32_t GPS_home[2];
 
@@ -367,6 +366,21 @@ bool areMotorsRunning(void) { return false; }
 bool IS_RC_MODE_ACTIVE(boxId_e) {return false;}
 bool isModeActivationConditionPresent(boxId_e) {return false;}
 uint32_t millis(void) {return 0;}
+uint32_t micros(void) {return 0;}
+// Storage for the enum blackbox.c reads; its header cannot be included here,
+// it declares armingFlags with a type this file stubs differently.
+uint32_t throwState;
+
+// Controllable, so a test can choose whether the board knows the wall clock.
+int64_t testRtcTime = 0;
+bool testRtcHasTime = false;
+bool rtcGet(int64_t *t) {
+    if (!testRtcHasTime) {
+        return false;
+    }
+    *t = testRtcTime;
+    return true;
+}
 bool sensors(uint32_t) {return false;}
 void serialWrite(serialPort_t *, uint8_t) {}
 uint32_t serialTxBytesFree(const serialPort_t *) {return 0;}
