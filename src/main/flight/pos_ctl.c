@@ -145,10 +145,20 @@ void posArrestZMotionOnly(void) {
     resetIterms();
 }
 
+static bool manual_takeover = false;
+
+bool isManualTakeover(void) {
+    return manual_takeover;
+}
+
+void clearManualTakeover(void) {
+    manual_takeover = false;
+    setSticksReference();
+}
+
 void updatePosCtl(timeUs_t current) {
     timeDelta_t timeInDeadreckoning = cmpTimeUs(current, posMeasNed.time_us);
     static bool latch_descend = false;
-    static bool manual_takeover = false;
 
     // the integrator is only meaningful within one setpoint interpretation
     static uint8_t last_sp_mode = LOCAL_POS_SP_POSITION;
@@ -168,12 +178,7 @@ void updatePosCtl(timeUs_t current) {
         posSpNed.valid = false;
     }
 
-    if (manual_takeover && posSpNed.valid) {
-        // no more manual control because new setpoint received
-        // reset sticks, so that we can detect new stick movement later
-        manual_takeover = false;
-        setSticksReference();
-    } else if (!manual_takeover && ARMING_FLAG(ARMED)
+    if (!manual_takeover && ARMING_FLAG(ARMED)
             && FLIGHT_MODE(POSITION_MODE | VELOCITY_MODE) && haveSticksMoved()) {
         manual_takeover = true;
         posSpNed.valid = false;

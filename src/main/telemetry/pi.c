@@ -57,6 +57,7 @@
 #include "flight/failsafe.h"
 #include "flight/position.h"
 #include "flight/ekf.h"
+#include "flight/pos_ctl.h"
 
 #include "io/serial.h"
 #include "io/gimbal.h"
@@ -265,7 +266,11 @@ void piSendStatus(void)
     }
     // Which control family the pilot's switches have selected, so that the host
     // knows which of the two offboard languages the FC is currently obeying.
-    if (FLIGHT_MODE(POSITION_MODE)) {
+    if (FLIGHT_MODE(POSITION_MODE)
+#ifdef USE_LOCAL_POSITION
+            && !isManualTakeover()
+#endif
+       ) {
         flags |= PI_STATUS_FLAG_POS_CTL_ACTIVE;
     }
 #if defined(USE_RX_PI_OVERRIDE)

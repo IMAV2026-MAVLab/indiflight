@@ -93,7 +93,6 @@ void setLocalPosSp(local_pos_sp_ned_t* sp) {
     }
     posSpNed = *sp;
     posSpNed.valid = true;
-    setSticksReference();
 }
 
 void setLocalPosSpHere(void) {

@@ -106,6 +106,8 @@ void resetIterms();
 void posArrestMotion();
 void posArrestZMotionOnly();
 void updatePosCtl(timeUs_t current);
+bool isManualTakeover(void);
+void clearManualTakeover(void);
 void posGetVelSpNedFromPosSp(void);
 void posGetVelSpNedFromSticks(void);
 void posGetAccSpNed(timeUs_t current);

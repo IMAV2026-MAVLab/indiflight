@@ -77,6 +77,7 @@
 #include "flight/learner.h"
 #include "flight/throw.h"
 #include "flight/position.h"
+#include "flight/pos_ctl.h"
 #include "flight/trajectory_tracker.h"
 #include "flight/rpm_filter.h"
 #include "flight/servos.h"
@@ -1107,6 +1108,7 @@ void processRxModes(timeUs_t currentTimeUs)
                 if (ARMING_FLAG(ARMED) && localPosSpNeedsEkf()) {
                     setLocalPosSpHere();
                 }
+                clearManualTakeover();
                 ENABLE_FLIGHT_MODE(POSITION_MODE);
             }
         }
