@@ -359,6 +359,13 @@ void posGetVelSpNedFromPosSp(void) {
 
     // constrain magnitude here
     posConstrainVelSp(maxHorzV);
+
+    if (mode == LOCAL_POS_SP_POSITION) {
+        const float commandedVertV = fabsf(commandedVel.V.Z);
+        if (commandedVertV > POS_MIN_COMMANDED_SPEED) {
+            posSpNed.vel.V.Z = constrainf(posSpNed.vel.V.Z, -commandedVertV, commandedVertV);
+        }
+    }
 }
 
 void posGetVelSpNedFromSticks(void) {
