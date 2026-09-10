@@ -194,9 +194,9 @@ void piSendIMU(void)
 void piSendEkfInputs(void)
 {
     piMsgEkfInputsTx.time_us = (uint32_t) gyro.rawSensorDev->gyroLastEXTIUs;
-    piMsgEkfInputsTx.x = 2048.f * acc.accADCafterRpm[0] * acc.dev.acc_1G_rec;
-    piMsgEkfInputsTx.y = 2048.f * acc.accADCafterRpm[1] * acc.dev.acc_1G_rec;
-    piMsgEkfInputsTx.z = 2048.f * acc.accADCafterRpm[2] * acc.dev.acc_1G_rec;
+    piMsgEkfInputsTx.x = 2048.f * acc.accADCf[0] * acc.dev.acc_1G_rec;
+    piMsgEkfInputsTx.y = 2048.f * acc.accADCf[1] * acc.dev.acc_1G_rec;
+    piMsgEkfInputsTx.z = 2048.f * acc.accADCf[2] * acc.dev.acc_1G_rec;
     piMsgEkfInputsTx.p = (int16_t) ( ((float) ((1 << 15) - 1)) * gyro.gyroADCafterRpm[0] * 0.0005f );
     piMsgEkfInputsTx.q = (int16_t) ( ((float) ((1 << 15) - 1)) * gyro.gyroADCafterRpm[1] * 0.0005f );
     piMsgEkfInputsTx.r = (int16_t) ( ((float) ((1 << 15) - 1)) * gyro.gyroADCafterRpm[2] * 0.0005f );
