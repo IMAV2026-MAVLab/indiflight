@@ -48,7 +48,7 @@
 #error "USE_LOCAL_POSITION require the use of USE_EKF"
 #endif
 
-PG_REGISTER_ARRAY_WITH_RESET_FN(positionProfile_t, POSITION_PROFILE_COUNT, positionProfiles, PG_POSITION_PROFILE, 0);
+PG_REGISTER_ARRAY_WITH_RESET_FN(positionProfile_t, POSITION_PROFILE_COUNT, positionProfiles, PG_POSITION_PROFILE, 1);
 
 void pgResetFn_positionProfiles(positionProfile_t *positionProfiles) {
     for (int i = 0; i < POSITION_PROFILE_COUNT; i++) {
@@ -72,6 +72,7 @@ void pgResetFn_positionProfiles(positionProfile_t *positionProfiles) {
         p->weathervane_p = 0;
         p->weathervane_min_v = 200;
         p->use_spf_attenuation = 1;
+        p->use_lateral_thrust = 0;
     }
 }
 
@@ -103,6 +104,7 @@ void initPositionRuntime(void) {
     posRuntime.weathervane_p = p->weathervane_p * 0.1f;
     posRuntime.weathervane_min_v = p->weathervane_min_v * 0.01f;
     posRuntime.use_spf_attenuation = (bool) p->use_spf_attenuation;
+    posRuntime.use_lateral_thrust = (bool) p->use_lateral_thrust;
 }
 
 void changePositionProfile(uint8_t profileIndex)
@@ -441,28 +443,132 @@ void posGetAccSpNed(timeUs_t current) {
     accSpNedFromPos.V.Z = constrainf(accSpNedFromPos.V.Z, -posRuntime.vert_max_a_up, posRuntime.vert_max_a_down);
 }
 
-void posGetAttSpNedAndSpfSpBody(timeUs_t current) {
-    UNUSED(current);
+// Underactuated airframe: tilt the drone so that its thrust axis carries the whole specific force setpoint
+static void posGetAttSpNedByTilting(void) {
     /*
      * We want 
-     * 1. keep drone level (zero attitude)
+     * 1. point the negative body z axis (thrust) towards accSpNed - Gravity
      * 2. point the positive body x axis (nose) as close to (cosYaw sinYaw 0)**T as possible, while respecting 1.
      */
-    // float Psi = getYawWithoutSingularity(); // current heading
+    float Psi = getYawWithoutSingularity(); // current heading
     fp_quaternion_t attitude_q;
     getAttitudeQuaternion(&attitude_q); // current attitude
     // current body axes in inertial
-    // fp_vector_t currentX = { .A = { rMat.m[0][0], rMat.m[1][0], rMat.m[2][0] } };
-    // fp_vector_t currentZ = { .A = { rMat.m[0][2], rMat.m[1][2], rMat.m[2][2] } };
+    fp_vector_t currentX = { .A = { rMat.m[0][0], rMat.m[1][0], rMat.m[2][0] } };
+    fp_vector_t currentZ = { .A = { rMat.m[0][2], rMat.m[1][2], rMat.m[2][2] } };
 
     // convert acc setpoint to specific forces in NED.
     // TODO: could add drag term here
     fp_vector_t spfSpNed = accSpNedFromPos;
     spfSpNed.V.Z -= GRAVITYf;
 
-    // thrust setpoint in body frame for a multicopter (assuming zero attitude):
-    // TODO: rotate to body frame
-    // float spfSpLength = VEC3_LENGTH(spfSpNed);
+    // thrust setpoint in body frame for a multicopter:
+    float spfSpLength = VEC3_LENGTH(spfSpNed);
+    spfSpBodyFromPos.V.X = 0.f;
+    spfSpBodyFromPos.V.Y = 0.f;
+    spfSpBodyFromPos.V.Z = -spfSpLength;
+
+    if (spfSpLength < 1e-6) {
+        // when falling is commanded (spfSpNed = 0), keep current attitude apart
+        // from yawing towards the commanded headingSp
+        if (posSpNed.trackPsi) {
+            fp_quaternion_t yawNed = {
+                .w = cos_approx( 0.5f * (posSpNed.psi - Psi) ),
+                .x = 0.f,
+                .y = 0.f,
+                .z = sin_approx( 0.5f * (posSpNed.psi - Psi) ),
+            };
+
+            attSpNedFromPos = chain_quaternion(&attitude_q, &yawNed);
+        } else {
+            // not asked to track yaw, we're done, just copy current attitude
+            // to setpoint
+            attSpNedFromPos = attitude_q;
+        }
+        return;
+    }
+
+    // base case: we need to set up the unit directions x, y, z to generate our
+    //            attitude setpoint
+
+    // z is easy:  z = -spfSpNed / || spfSpNed ||
+    fp_vector_t xSp,ySp,zSp;
+    zSp = spfSpNed;
+    VEC3_SCALAR_MULT(zSp, -1.f);
+    VEC3_NORMALIZE(zSp);
+
+    if (posRuntime.use_spf_attenuation) {
+        // if we havent reached out attitude yet, we may need to reduce thrust
+        // setpoint to avoid thrusting into the wrong direction.
+        // This is done by trying to match the thrust along z-axis, but limiting
+        // the total thrust to the total thrust commanded
+        fp_quaternion_t qHover;
+        getHoverAttitudeQuaternion(&qHover);
+        fp_vector_t zB = quatRotMatCol(&qHover, 2);
+
+        float ratio;
+        if (fabsf(zB.V.Z) < 1e-6f) {
+            ratio = (zSp.V.Z > 0.f) ? 1.f : -1.f;
+        } else {
+            ratio = zSp.V.Z / zB.V.Z;
+        }
+        ratio = constrainf(ratio, 0.f, 1.f);
+        spfSpBodyFromPos.V.Z *= ratio;
+    }
+
+    if (!posSpNed.trackPsi) {
+        // just use minimum-norm quaternion rotation that rotates current z axis
+        // to the desired z axis.
+        fp_quaternion_t attError; // in NED coordinates!
+        quaternion_of_two_vectors(&attError, &currentZ, &zSp, &currentX);
+
+        // exterinsic rotation, first attitude_q then attError.
+        attSpNedFromPos = chain_quaternion(&attError, &attitude_q);
+        return;
+    }
+
+    // x = (starboardSp x z) / || starboardSp x z ||
+    // this is because it has to be in the starboardSp-plane and also perp to z
+    fp_vector_t headingSp   = { .A = { cos_approx(posSpNed.psi), sin_approx(posSpNed.psi), 0} };
+    fp_vector_t starboardSp = { .A = {-sin_approx(posSpNed.psi), cos_approx(posSpNed.psi), 0} };
+
+    VEC3_CROSS(xSp, starboardSp, zSp);
+    if (VEC3_LENGTH(xSp) < 1e-6f) {
+        // thrust is perp to the heading, so our nose should point towards
+        // the heading
+        xSp = headingSp;
+    } else {
+        VEC3_NORMALIZE(xSp);
+    }
+    VEC3_CROSS(ySp, zSp, xSp);
+
+    // convert to rotation matrix
+    fp_rotationMatrix_t rotM;
+    for (int row = 0; row < 3; row++) {
+        rotM.m[row][0] = xSp.A[row];
+        rotM.m[row][1] = ySp.A[row];
+        rotM.m[row][2] = zSp.A[row];
+    }
+    quaternion_of_rotationMatrix( &attSpNedFromPos, &rotM );
+}
+
+// Fully actuated airframe: stay level and leave the lateral specific force to the control allocation
+static void posGetAttSpNedByLateralThrust(void) {
+    /*
+     * We want 
+     * 1. keep drone level (zero attitude)
+     * 2. point the positive body x axis (nose) as close to (cosYaw sinYaw 0)**T as possible, while respecting 1.
+     */
+    float Psi = getYawWithoutSingularity(); // current heading
+    fp_quaternion_t attitude_q;
+    getAttitudeQuaternion(&attitude_q); // current attitude
+
+    // convert acc setpoint to specific forces in NED.
+    // TODO: could add drag term here
+    fp_vector_t spfSpNed = accSpNedFromPos;
+    spfSpNed.V.Z -= GRAVITYf;
+
+    // full specific force setpoint, rotated into the body frame
     spfSpBodyFromPos.V.X = spfSpNed.V.X;
     spfSpBodyFromPos.V.Y = spfSpNed.V.Y;
     spfSpBodyFromPos.V.Z = spfSpNed.V.Z;
@@ -471,99 +577,25 @@ void posGetAttSpNedAndSpfSpBody(timeUs_t current) {
     iquat.w = -iquat.w;
     rotate_vector_with_quaternion(&spfSpBodyFromPos, &iquat);
 
-    // keep drone level (zero attitude apart from yaw)
+    // keep drone level (zero attitude apart from yaw), holding the current heading if not asked to track one
+    const float psiSp = posSpNed.trackPsi ? posSpNed.psi : Psi;
     fp_quaternion_t levelNed = {
-        .w = cos_approx( 0.5f * (posSpNed.psi) ),
+        .w = cos_approx( 0.5f * psiSp ),
         .x = 0.f,
         .y = 0.f,
-        .z = sin_approx( 0.5f * (posSpNed.psi) ),
+        .z = sin_approx( 0.5f * psiSp ),
     };
 
     attSpNedFromPos = levelNed;
+}
 
-
-    // if (spfSpLength < 1e-6) {
-    //     // when falling is commanded (spfSpNed = 0), keep current attitude apart
-    //     // from yawing towards the commanded headingSp
-    //     if (posSpNed.trackPsi) {
-    //         fp_quaternion_t yawNed = {
-    //             .w = cos_approx( 0.5f * (posSpNed.psi - Psi) ),
-    //             .x = 0.f,
-    //             .y = 0.f,
-    //             .z = sin_approx( 0.5f * (posSpNed.psi - Psi) ),
-    //         };
-
-    //         attSpNedFromPos = chain_quaternion(&attitude_q, &yawNed);
-    //     } else {
-    //         // not asked to track yaw, we're done, just copy current attitude
-    //         // to setpoint
-    //         attSpNedFromPos = attitude_q;
-    //     }
-    //     return;
-    // }
-
-    // base case: we need to set up the unit directions x, y, z to generate our
-    //            attitude setpoint
-
-    // z is easy:  z = -spfSpNed / || spfSpNed ||
-    // fp_vector_t xSp,ySp,zSp;
-    // zSp = spfSpNed;
-    // VEC3_SCALAR_MULT(zSp, -1.f);
-    // VEC3_NORMALIZE(zSp);
-
-    // if (posRuntime.use_spf_attenuation) {
-    //     // if we havent reached out attitude yet, we may need to reduce thrust
-    //     // setpoint to avoid thrusting into the wrong direction.
-    //     // This is done by trying to match the thrust along z-axis, but limiting
-    //     // the total thrust to the total thrust commanded
-    //     fp_quaternion_t qHover;
-    //     getHoverAttitudeQuaternion(&qHover);
-    //     fp_vector_t zB = quatRotMatCol(&qHover, 2);
-
-    //     float ratio;
-    //     if (fabsf(zB.V.Z) < 1e-6f) {
-    //         ratio = (zSp.V.Z > 0.f) ? 1.f : -1.f;
-    //     } else {
-    //         ratio = zSp.V.Z / zB.V.Z;
-    //     }
-    //     ratio = constrainf(ratio, 0.f, 1.f);
-    //     spfSpBodyFromPos.V.Z *= ratio;
-    // }
-
-    // if (!posSpNed.trackPsi) {
-    //     // just use minimum-norm quaternion rotation that rotates current z axis
-    //     // to the desired z axis.
-    //     fp_quaternion_t attError; // in NED coordinates!
-    //     quaternion_of_two_vectors(&attError, &currentZ, &zSp, &currentX);
-
-    //     // exterinsic rotation, first attitude_q then attError.
-    //     attSpNedFromPos = chain_quaternion(&attError, &attitude_q);
-    //     return;
-    // }
-
-    // x = (starboardSp x z) / || starboardSp x z ||
-    // this is because it has to be in the starboardSp-plane and also perp to z
-    // fp_vector_t headingSp   = { .A = { cos_approx(posSpNed.psi), sin_approx(posSpNed.psi), 0} };
-    // fp_vector_t starboardSp = { .A = {-sin_approx(posSpNed.psi), cos_approx(posSpNed.psi), 0} };
-
-    // VEC3_CROSS(xSp, starboardSp, zSp);
-    // if (VEC3_LENGTH(xSp) < 1e-6f) {
-    //     // thrust is perp to the heading, so our nose should point towards
-    //     // the heading
-    //     xSp = headingSp;
-    // } else {
-    //     VEC3_NORMALIZE(xSp);
-    // }
-    // VEC3_CROSS(ySp, zSp, xSp);
-
-    // // convert to rotation matrix
-    // fp_rotationMatrix_t rotM;
-    // for (int row = 0; row < 3; row++) {
-    //     rotM.m[row][0] = xSp.A[row];
-    //     rotM.m[row][1] = ySp.A[row];
-    //     rotM.m[row][2] = zSp.A[row];
-    // }
-    // quaternion_of_rotationMatrix( &attSpNedFromPos, &rotM );
+void posGetAttSpNedAndSpfSpBody(timeUs_t current) {
+    UNUSED(current);
+    if (posRuntime.use_lateral_thrust) {
+        posGetAttSpNedByLateralThrust();
+    } else {
+        posGetAttSpNedByTilting();
+    }
 }
 
 bool isWeathervane = false;

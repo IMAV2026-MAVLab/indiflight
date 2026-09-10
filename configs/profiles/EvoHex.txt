@@ -341,6 +341,7 @@ set position_max_downwards_accel = 500
 set position_max_tilt = 30
 set position_yaw_p = 30
 set position_use_thrust_attenuation = 1
+set position_use_lateral_thrust = 1
 
 
 positionprofile 2
@@ -368,6 +369,7 @@ set position_max_downwards_accel = 500
 # set position_yaw_p = 44
 set position_weathervane_p = 0
 set position_use_thrust_attenuation = 1
+set position_use_lateral_thrust = 1
 
 
 ## ----- SET DEFAULT PROFILES
