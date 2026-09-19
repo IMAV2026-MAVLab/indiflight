@@ -1992,12 +1992,12 @@ static void loadMainState(timeUs_t currentTimeUs)
     blackboxCurrent->ekf_quat[1] = lrintf(ekf_X[7] * UNIT_FLOAT_TO_SIGNED16VB);
     blackboxCurrent->ekf_quat[2] = lrintf(ekf_X[8] * UNIT_FLOAT_TO_SIGNED16VB);
     blackboxCurrent->ekf_quat[3] = lrintf(ekf_X[9] * UNIT_FLOAT_TO_SIGNED16VB);
-    blackboxCurrent->ekf_acc_b[0] = lrintf(ekf_X[9] * 1000); // mm/s^2
-    blackboxCurrent->ekf_acc_b[1] = lrintf(ekf_X[10] * 1000); // mm/s^2
-    blackboxCurrent->ekf_acc_b[2] = lrintf(ekf_X[11] * 1000); // mm/s^2
-    blackboxCurrent->ekf_gyro_b[0] = lrintf(1000.f*RADIANS_TO_DEGREES(ekf_X[12])); // mdeg/s
-    blackboxCurrent->ekf_gyro_b[1] = lrintf(1000.f*RADIANS_TO_DEGREES(ekf_X[13])); // mdeg/s
-    blackboxCurrent->ekf_gyro_b[2] = lrintf(1000.f*RADIANS_TO_DEGREES(ekf_X[14])); // mdeg/s
+    blackboxCurrent->ekf_acc_b[0] = lrintf(ekf_X[10] * 1000); // mm/s^2
+    blackboxCurrent->ekf_acc_b[1] = lrintf(ekf_X[11] * 1000); // mm/s^2
+    blackboxCurrent->ekf_acc_b[2] = lrintf(ekf_X[12] * 1000); // mm/s^2
+    blackboxCurrent->ekf_gyro_b[0] = lrintf(1000.f*RADIANS_TO_DEGREES(ekf_X[13])); // mdeg/s
+    blackboxCurrent->ekf_gyro_b[1] = lrintf(1000.f*RADIANS_TO_DEGREES(ekf_X[14])); // mdeg/s
+    blackboxCurrent->ekf_gyro_b[2] = lrintf(1000.f*RADIANS_TO_DEGREES(ekf_X[15])); // mdeg/s
 #endif
 
 #ifdef USE_LEARNER
