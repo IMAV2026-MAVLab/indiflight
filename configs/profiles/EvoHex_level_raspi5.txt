@@ -500,7 +500,7 @@ set ahrs_dcm_ki = 0
 set small_angle = 25
 set ahrs_process_denom = 16
 set auto_disarm_delay = 5
-set gyro_cal_on_first_arm = OFF
+set gyro_cal_on_first_arm = ON
 set deadband = 0
 set yaw_deadband = 0
 set yaw_control_reversed = OFF
@@ -794,13 +794,13 @@ positionprofile 0
 
 # positionprofile 0
 set position_horizontal_p = 30
-set position_horizontal_i = 0
+set position_horizontal_i = 2
 set position_horizontal_d = 23
 set position_max_horizontal_speed = 100
 set position_max_horizontal_accel = 500
 set position_max_tilt = 30
 set position_vertical_p = 40
-set position_vertical_i = 2
+set position_vertical_i = 4
 set position_vertical_d = 35
 set position_max_upwards_speed = 100
 set position_max_downwards_speed = 100
