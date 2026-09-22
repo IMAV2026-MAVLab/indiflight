@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <float.h>
 #include <math.h>
@@ -27,6 +28,12 @@
 #ifndef sq
 #define sq(x) ((x)*(x))
 #endif
+
+static inline bool isFiniteFloat(float value)
+{
+    union { float f; uint32_t u; } bits = { .f = value };
+    return (bits.u & 0x7F800000u) != 0x7F800000u;
+}
 #define power3(x) ((x)*(x)*(x))
 #define power5(x) ((x)*(x)*(x)*(x)*(x))
 

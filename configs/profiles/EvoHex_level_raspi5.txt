@@ -1,9 +1,36 @@
+###############
+# BUILD FLAGS #
+###############
+
+## ----- RC components
+#define USE_SERIALRX
+#define USE_SERIALRX_SBUS
+#define USE_SERIALRX_CRSF
+
+#define USE_TELEMETRY
+#define USE_TELEMETRY_SBUS
+#define USE_TELEMETRY_CRSF
+#define USE_TELEMETRY_PI
+
+## ----- Outputs and logging
+#define USE_DSHOT
+#define USE_BLACKBOX
+
+## ----- Developer features
+#define PI_STATS             ## needs USE_TELEMETRY_PI
+#define PI_USE_PRINT_MSGS
+
+## ----- INDIFLIGHT features
+#define USE_INDI
+#define USE_EKF
+#define USE_LOCAL_POSITION
+
 # 
 
 # dump
 
 # version
-# Indiflight / STM32F405 (S405) 5.0.0 Aug 31 2026 / 10:56:49 (39fb7dc16) MSP API: 1.45
+# Indiflight / STM32F405 (S405) 5.0.0 Sep 19 2026 / 14:24:18 (3a14abec2) MSP API: 1.45
 
 # start the command batch
 batch start
@@ -259,9 +286,9 @@ beacon -RX_SET
 map AETR1234
 
 # aux
-aux 0 0 0 900 1175 0 0
+aux 0 0 0 900 1400 0 0
 aux 1 1 1 900 2100 0 0
-aux 2 55 3 900 1200 0 0
+aux 2 55 3 900 1400 0 0
 aux 3 36 5 1700 2100 0 0
 aux 4 0 0 900 900 0 0
 aux 5 0 0 900 900 0 0
@@ -367,7 +394,7 @@ set acc_hardware = AUTO
 set acc_lpf_hz = 25
 set acc_trim_pitch = 0
 set acc_trim_roll = 0
-set acc_calibration = -2,-50,-1,1
+set acc_calibration = 72,-50,5,1
 set acc_offset = 0,0,0
 set baro_bustype = NONE
 set baro_spi_device = 0

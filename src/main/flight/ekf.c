@@ -409,6 +409,14 @@ void updateEkf(timeUs_t currentTimeUs) {
 
     float *ekf_X = ekf_get_X();
 
+  // Avoid infinite values  
+		for (int i = 0; i < N_STATES; i++) {
+        if (!isFiniteFloat(ekf_X[i])) {
+            forceDeinitEkf();
+            return;
+        }
+    }
+
     // update position
     posEstNed = (fp_vector_t) { .V = {ekf_X[0], ekf_X[1], ekf_X[2]} };
     velEstNed = (fp_vector_t) { .V = {ekf_X[3], ekf_X[4], ekf_X[5]} };

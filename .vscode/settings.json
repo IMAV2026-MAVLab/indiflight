@@ -18,4 +18,5 @@
         "gyro.h": "c",
         "maths.h": "c"
     },
+    "cmake.sourceDirectory": "/home/rafa/hexacopter_ws/workspace/aerostack2_ws/src/indiflight_pkg/indiflight/support/groundstation/relay",
 }

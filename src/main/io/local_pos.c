@@ -56,7 +56,51 @@
 local_pos_ned_t posMeasNed;
 local_pos_sp_ned_t posSpNed;
 
+// Envelope a measurement has to fall inside to reach the estimator
+#define LOCAL_POS_MEAS_MAX_POSITION 1000.0f    // m from the frame origin
+#define LOCAL_POS_MEAS_MAX_VELOCITY 50.0f      // m/s
+#define LOCAL_POS_MEAS_MAX_QUAT_SQ_ERROR 0.1f  // of the squared quaternion norm from 1
+
+static bool isVectorWithin(const fp_vector_t* v, float limit)
+{
+    for (int axis = 0; axis < 3; axis++) {
+        if (!isFiniteFloat(v->A[axis]) || (fabsf(v->A[axis]) > limit)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+// Range filter
+static bool isLocalPosMeasPlausible(const local_pos_ned_t* pos)
+{
+    if ((pos->mode & LOCAL_POS_MEAS_USE_POS)
+            && !isVectorWithin(&pos->pos, LOCAL_POS_MEAS_MAX_POSITION)) {
+        return false;
+    }
+
+    if ((pos->mode & LOCAL_POS_MEAS_USE_VEL)
+            && !isVectorWithin(&pos->vel, LOCAL_POS_MEAS_MAX_VELOCITY)) {
+        return false;
+    }
+
+    if (pos->mode & LOCAL_POS_MEAS_USE_QUAT) {
+        const float normSq = sq(pos->quat.w) + sq(pos->quat.x)
+            + sq(pos->quat.y) + sq(pos->quat.z);
+        if (!isFiniteFloat(normSq) || (fabsf(normSq - 1.0f) > LOCAL_POS_MEAS_MAX_QUAT_SQ_ERROR)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 void setLocalPosMeas(local_pos_ned_t* pos) {
+    if (!isLocalPosMeasPlausible(pos)) {
+        return;
+    }
+
     // Age checks elsewhere compute (now - stamp), which a future stamp defeats
     if (cmpTimeUs(pos->time_us, micros()) > EKF_MAX_MEAS_AGE_US) {
         return;
