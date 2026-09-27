@@ -381,10 +381,15 @@ void updateEkf(timeUs_t currentTimeUs) {
         use_quat &= posMeasNed.quat_valid;
         use_quat &= (posMeasNed.mode & LOCAL_POS_MEAS_USE_QUAT) != 0;
 
-        ekf_Z[3] = (use_quat) * posMeasNed.quat.w;
-        ekf_Z[4] = (use_quat) * posMeasNed.quat.x;
-        ekf_Z[5] = (use_quat) * posMeasNed.quat.y;
-        ekf_Z[6] = (use_quat) * posMeasNed.quat.z;
+        // Gate the quaternion rows instead of measuring a null quaternion: at zero gain
+        // they contribute nothing, while (0,0,0,0) is an attitude the filter would fuse
+        ekf_set_use_quat(use_quat);
+        if (use_quat) {
+            ekf_Z[3] = posMeasNed.quat.w;
+            ekf_Z[4] = posMeasNed.quat.x;
+            ekf_Z[5] = posMeasNed.quat.y;
+            ekf_Z[6] = posMeasNed.quat.z;
+        }
 
 		ekfSetMeasNoise(
 			posMeasNed.mode & LOCAL_POS_MEAS_USE_POS,
